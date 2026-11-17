@@ -1,5 +1,19 @@
+# Environment variables and secrets
 .env
-__pycache__/
-*.pyc
-.venv/
+.env.*
+!.env.example
 postgres.env
+
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Pytest cache
+.pytest_cache/
+
+# Extra Files 
+roughh.py
