@@ -45,19 +45,21 @@ logging.basicConfig(
 #--------------Lifespan--------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db_name = os.getenv("DB_NAME")
-    print(f"--> Lifespan connecting to DB: {db_name}")
+    database_url = os.getenv("DATABASE_URL")
+
+    print("--> Connecting to Neon PostgreSQL")
+
     app.state.pool = await asyncpg.create_pool(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        database=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        min_size=5,
-        max_size=20
+        dsn=database_url,
+        min_size=1,
+        max_size=5
     )
+
     yield
+
     await app.state.pool.close()
+
+
 app = FastAPI(lifespan=lifespan)
 
 # -----------------------Semaphore-----------------
