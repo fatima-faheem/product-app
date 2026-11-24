@@ -10,10 +10,12 @@ import gemini_helper as gh
 
 from gemini_helper import (
     AIBlockedError,
+    AIQuotaError,
     AITimeoutError,
     AIUpstreamError,
     call_gemini,
     is_retryable,
+    quota_kind,
 )
 
 
@@ -48,6 +50,26 @@ def api_error(code):
         {"error": {"message": "boom", "status": "X"}}
     )
 
+def quota_api_error(quota_id):
+    return errors.APIError(
+        429,
+        {
+            "error": {
+                "message": "Quota exceeded",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [
+                            {
+                                "quotaId": quota_id
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    )
 
 def mock_call(monkeypatch, *, response=None, exc=None):
     """Replace _call_with_retry for ordinary helper tests."""
@@ -229,13 +251,14 @@ async def test_failures_raise_the_right_ai_error(
         await call_gemini("x")
 
 
-async def test_api_error_keeps_the_status_code(monkeypatch):
+async def test_api_error_429_raises_quota_error(monkeypatch):
     mock_call(monkeypatch, exc=api_error(429))
 
-    with pytest.raises(AIUpstreamError) as info:
+    with pytest.raises(AIQuotaError) as info:
         await call_gemini("x")
 
     assert info.value.code == 429
+    assert info.value.kind == "unknown"
 
 
 async def test_timeout_is_not_reported_as_upstream_error(monkeypatch):
@@ -253,7 +276,7 @@ async def test_timeout_is_not_reported_as_upstream_error(monkeypatch):
 
 @pytest.mark.parametrize(
     "code",
-    [408, 429, 500, 502, 503, 504]
+    [408, 500, 502, 503, 504]
 )
 def test_retryable_status_codes(code):
     assert is_retryable(api_error(code)) is True
@@ -273,6 +296,54 @@ def test_timeout_is_retryable():
 
 def test_other_exceptions_are_not_retryable():
     assert is_retryable(ValueError("boom")) is False
+
+@pytest.mark.parametrize(
+    "quota_id, expected",
+    [
+        (
+            "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            "daily"
+        ),
+        (
+            "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+            "rate"
+        ),
+        (
+            "SomeUnknownQuota",
+            "unknown"
+        ),
+    ],
+)
+def test_quota_kind(quota_id, expected):
+    exc = quota_api_error(quota_id)
+
+    assert quota_kind(exc) == expected
+
+
+def test_quota_kind_without_details_returns_unknown():
+    exc = api_error(429)
+
+    assert quota_kind(exc) == "unknown"
+
+
+def test_daily_quota_is_not_retryable():
+    exc = quota_api_error(
+        "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    )
+
+    assert is_retryable(exc) is False
+
+
+def test_per_minute_quota_is_retryable():
+    exc = quota_api_error(
+        "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+    )
+
+    assert is_retryable(exc) is True
+
+
+def test_unknown_429_is_retryable():
+    assert is_retryable(api_error(429)) is True
 
 
 # --------------------------------------------------
@@ -355,3 +426,30 @@ async def test_gives_up_after_three_attempts(monkeypatch):
         await call_gemini("x")
 
     assert calls["n"] == 3
+
+
+# Test that Tenacity retries per-minute quota (429) errors
+async def test_per_minute_quota_retries(monkeypatch):
+    attempts = 0
+
+    async def fake_generate(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+
+        if attempts == 1:
+            raise quota_api_error(
+                "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+            )
+
+        return SimpleNamespace(text="Success")
+
+    monkeypatch.setattr(gh.client.aio.models, "generate_content", fake_generate)
+
+    result = await gh._call_with_retry(
+    "test prompt",
+    None,
+    30.0
+)
+
+    assert attempts == 2
+    assert result.text == "Success"

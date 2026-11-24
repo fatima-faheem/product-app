@@ -1,0 +1,2346 @@
+
+# FOR TEST DATABASE--> (my_app_test)
+A. Check columns, data types, NULL rules and defaults
+-------------+-----------------------------+-------------+--------------------------------------
+ id          | integer                     | NO          | nextval('products_id_seq'::regclass)
+ name        | text                        | NO          | 
+ description | text                        | NO          | 
+ category    | text                        | NO          | 'Other'::text
+ price       | numeric                     | NO          | 
+ stock       | integer                     | YES         | 0
+-- More  -- 
+
+B. Check constraints
+-------------------------------+---------+----------------------
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+ products_name_key             | u       | UNIQUE (name)
+ products_name_not_null        | n       | NOT NULL name
+ products_pkey                 | p       | PRIMARY KEY (id)
+-- More  -- 
+
+C. Check indexes
+indexname     |                                  indexdef                                                                 
+-------------------+-----------------------------------------------------------------------------
+ products_name_key | CREATE UNIQUE INDEX products_name_key ON public.products USING btree (name)
+ products_pkey     | CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)
+(2 rows)
+
+
+# FOR local DB 
+
+A. Check columns, data types, NULL rules and defaults
+-------------+-----------------------------+-------------+--------------------------------------
+ id          | integer                     | NO          | nextval('products_id_seq'::regclass)
+ name        | character varying           | NO          | 
+ description | text                        | NO          | 
+ category    | text                        | NO          | 'Other'::text
+ price       | numeric                     | NO          | 
+ stock       | integer                     | NO          | 0
+
+
+B. Check constraints
+-------------------------------+---------+-----------------------------------------------------------------
+ check_price                   | c       | CHECK ((price >= (0)::numeric))
+ check_rating                  | c       | CHECK (((rating >= (0)::numeric) AND (rating <= (5)::numeric)))
+ check_stock                   | c       | CHECK ((stock >= 0))
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+-- More  -- 
+
+
+C. Check indexes
+indexname     |                                  indexdef                                                                 
+-------------------+-----------------------------------------------------------------------------
+ products_name_key | CREATE UNIQUE INDEX products_name_key ON public.products USING btree (name)
+ products_pkey     | CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)
+(2 rows)
+
+
+
+# CHATGPT 2
+ 
+# FOR local table 
+# query 1:
+SELECT
+    column_name,
+    ordinal_position,
+    data_type,
+    character_maximum_length,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'products'
+ORDER BY ordinal_position;
+(output):
+column_name | ordinal_position |          data_type          | character_maximum_length | is_nullable |            column_default            
+-------------+------------------+-----------------------------+--------------------------+-------------+--------------------------------------
+ id          |                1 | integer                     |                          | NO          | nextval('products_id_seq'::regclass)
+ name        |                2 | character varying           |                      100 | NO          | 
+ description |                3 | text                        |                          | NO          | 
+ category    |                4 | text                        |                          | NO          | 'Other'::text
+ price       |                5 | numeric                     |                          | NO          | 
+ stock       |                6 | integer                     |                          | NO          | 0
+ rating      |                7 | numeric                     |                          | YES         | 0.00
+ created_at  |                8 | timestamp without time zone |                          | YES         | CURRENT_TIMESTAMP
+(8 rows)
+
+# query 2 :
+SELECT
+    conname,
+    contype,
+    pg_get_constraintdef(oid)
+FROM pg_constraint
+WHERE conrelid = 'public.products'::regclass
+ORDER BY conname;
+(output):
+ conname            | contype |                      pg_get_constraintdef                       
+-------------------------------+---------+-----------------------------------------------------------------
+ check_price                   | c       | CHECK ((price >= (0)::numeric))
+ check_rating                  | c       | CHECK (((rating >= (0)::numeric) AND (rating <= (5)::numeric)))
+ check_stock                   | c       | CHECK ((stock >= 0))
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+ products_name_key             | u       | UNIQUE (name)
+ products_name_not_null        | n       | NOT NULL name
+ products_pkey                 | p       | PRIMARY KEY (id)
+ products_price_not_null       | n       | NOT NULL price
+ products_stock_not_null       | n       | NOT NULL stock
+(11 rows)
+
+
+# Tests Dtabase 
+#query 1:
+output:
+t            
+-------------+------------------+-----------------------------+--------------------------+-------------+--------------------------------------
+ id          |                1 | integer                     |                          | NO          | nextval('products_id_seq'::regclass)
+ name        |                2 | text                        |                          | NO          | 
+ description |                3 | text                        |                          | NO          | 
+ category    |                4 | text                        |                          | NO          | 'Other'::text
+ price       |                5 | numeric                     |                          | NO          | 
+ stock       |                6 | integer                     |                          | YES         | 0
+ rating      |                7 | numeric                     |                          | YES         | 
+ created_at  |                8 | timestamp without time zone |                          | YES         | CURRENT_TIMESTAMP
+(8 rows)
+
+query 2;
+output:
+conname            | contype | pg_get_constraintdef 
+-------------------------------+---------+----------------------
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+ products_name_key             | u       | UNIQUE (name)
+ products_name_not_null        | n       | NOT NULL name
+ products_pkey                 | p       | PRIMARY KEY (id)
+ products_price_not_null       | n       | NOT NULL price
+(7 rows)
+
+# The productio neon table 
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) DEFAULT 'Other',
+    price NUMERIC(10, 2) NOT NULL CHECK (price > 0),
+    stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    rating NUMERIC(3, 2) DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+--------------------------------------------------------
+
+(chatgot 3 ):
+
+# loacl databse 
+1. Columns, data types, NULL rules and defaults
+SELECT
+    column_name,
+    data_type,
+    character_maximum_length,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'products'
+ORDER BY ordinal_position;
+
+output:
+column_name |          data_type          | character_maximum_length | is_nullable |            column_default            
+-------------+-----------------------------+--------------------------+-------------+--------------------------------------
+ id          | integer                     |                          | NO          | nextval('products_id_seq'::regclass)
+ name        | character varying           |                      100 | NO          | 
+ description | text                        |                          | NO          | 
+ category    | text                        |                          | NO          | 'Other'::text
+ price       | numeric                     |                          | NO          | 
+ stock       | integer                     |                          | NO          | 0
+ rating      | numeric                     |                          | YES         | 0.00
+ created_at  | timestamp without time zone |                          | YES         | CURRENT_TIMESTAMP
+(8 rows)
+
+demodb=# 
+
+2. Constraints
+SELECT
+    conname,
+    contype,
+    pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conrelid = 'public.products'::regclass
+ORDER BY conname;
+
+output:
+conname            | contype |                           definition                            
+-------------------------------+---------+-----------------------------------------------------------------
+ check_price                   | c       | CHECK ((price >= (0)::numeric))
+ check_rating                  | c       | CHECK (((rating >= (0)::numeric) AND (rating <= (5)::numeric)))
+ check_stock                   | c       | CHECK ((stock >= 0))
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+ products_name_key             | u       | UNIQUE (name)
+ products_name_not_null        | n       | NOT NULL name
+ products_pkey                 | p       | PRIMARY KEY (id)
+ products_price_not_null       | n       | NOT NULL price
+ products_stock_not_null       | n       | NOT NULL stock
+(11 rows)
+
+demodb=# 
+
+3. Indexes
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'products'
+ORDER BY indexname;
+
+output:
+ indexname     |                                  indexdef                                   
+-------------------+-----------------------------------------------------------------------------
+ products_name_key | CREATE UNIQUE INDEX products_name_key ON public.products USING btree (name)
+ products_pkey     | CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)
+(2 rows)
+
+# test databse 
+1. Columns, data types, NULL rules and defaults
+SELECT
+    column_name,
+    data_type,
+    character_maximum_length,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'products'
+ORDER BY ordinal_position;
+
+output:
+id          | integer                     |                          | NO          | nextval('products_id_seq'::regclass)
+ name        | character varying           |                      100 | NO          | 
+ description | text                        |                          | NO          | 
+ category    | text                        |                          | NO          | 'Other'::text
+ price       | numeric                     |                          | NO          | 
+ stock       | integer                     |                          | NO          | 0
+ rating      | numeric                     |                          | YES         | 0.00
+ created_at  | timestamp without time zone |                          | YES         | CURRENT_TIMESTAMP     
+
+2. Constraints
+SELECT
+    conname,
+    contype,
+    pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conrelid = 'public.products'::regclass
+ORDER BY conname;
+
+output:
+ conname            | contype |                           definition                         
+-------------------------------+---------+--------------------------------------------------------------
+ check_price                   | c       | CHECK ((price >= (0)::numeric))
+ check_rating                  | c       | CHECK (((rating >= (0)::numeric) AND (rating <= (5)::numeric)
+ check_stock                   | c       | CHECK ((stock >= 0))
+ products_category_not_null    | n       | NOT NULL category
+ products_description_not_null | n       | NOT NULL description
+ products_id_not_null          | n       | NOT NULL id
+ products_name_key             | u       | UNIQUE (name)
+-- More  -- 
+
+3. Indexes
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'products'
+ORDER BY indexname;
+
+output:
+ indexname     |                                  indexdef                                                       
+-------------------+-----------------------------------------------------------------------------
+ products_name_key | CREATE UNIQUE INDEX products_name_key ON public.products USING btree (name)
+ products_pkey     | CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)
+(2 rows)
+
+
+---------------------------------------------------------------
+
+# nextv
+
+Test Folder-->
+
+1-helpers.py:
+
+from main import app
+import pytest
+import asyncio
+# Helper Function for inserting the data directly to database
+
+async def seed_products(products):
+    names = [p["name"] for p in products]
+    descriptions = [p["description"] for p in products]
+    categories = [p["category"] for p in products]
+    prices = [p["price"] for p in products]
+    stocks = [p["stock"] for p in products]
+    ratings = [p["rating"] for p in products]
+
+    async with app.state.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            INSERT INTO products
+                (name, description, category, price, stock, rating)
+            SELECT *
+            FROM UNNEST(
+                $1::text[],
+                $2::text[],
+                $3::text[],
+                $4::numeric[],
+                $5::integer[],
+                $6::numeric[]
+            )
+            RETURNING id, name, description, category, price, stock, rating
+            """,
+            names,
+            descriptions,
+            categories,
+            prices,
+            stocks,
+            ratings
+        )
+
+    return [dict(row) for row in rows]
+
+def product_data(**overrides):
+    data = {
+        "name": "Test Product",
+        "description": "Test description",
+        "category": "Electronics",
+        "price": 1000,
+        "stock": 10,
+        "rating": 4.5
+    }
+    data.update(overrides)
+    return data
+
+async def get_product_from_db(product_id):
+    async with app.state.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, description, category, price, stock, rating
+            FROM products
+            WHERE id = $1
+            """,
+            product_id
+        )
+
+    return dict(row) if row else None
+
+
+2- test_auth.py:
+
+import os
+
+import pytest
+
+import Api_Key_Check
+from main import app
+
+from fastapi import HTTPException
+
+# Import your existing test helpers.
+# Change "test_products" to the actual name of your existing test file.
+from helpers import (
+    seed_products,
+    product_data,
+    get_product_from_db,
+)
+
+
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
+
+TEST_KEY = os.environ["PRODUCT_API_KEY"]
+
+VALID_POST_BODY = [{
+    "name": "Auth Test Product",
+    "description": "Some description",
+    "category": "Other",
+    "price": 100,
+    "stock": 5,
+    "rating": 4.0,
+}]
+
+
+# Protected endpoints and their expected responses
+PROTECTED = [
+    pytest.param("POST", "/products", VALID_POST_BODY, 200, id="post"),
+    pytest.param("PATCH", "/products/999999", {"price": 100}, 404, id="patch"),
+    pytest.param("DELETE", "/products/999999", None, 404, id="delete"),
+]
+
+
+# ==================================================
+# 1. MISSING API KEY
+# ==================================================
+
+@pytest.mark.parametrize(
+    "method,url,body,ok_status",
+    PROTECTED
+)
+async def test_missing_key_returns_401(
+    anon_client, method, url, body, ok_status
+):
+    response = await anon_client.request(
+        method,
+        url,
+        json=body
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing API key"
+
+
+# ==================================================
+# 2. WRONG API KEY
+# ==================================================
+
+@pytest.mark.parametrize(
+    "method,url,body,ok_status",
+    PROTECTED
+)
+@pytest.mark.parametrize(
+    "bad_key",
+    [
+        "wrong-key",
+        "",
+        TEST_KEY + "x",
+        TEST_KEY[:-1],
+        TEST_KEY.upper(),
+    ],
+    ids=[
+        "wrong",
+        "empty",
+        "extra-char",
+        "missing-char",
+        "wrong-case",
+    ],
+)
+async def test_wrong_key_returns_401(
+    client, method, url, body, ok_status, bad_key
+):
+    response = await client.request(
+        method,
+        url,
+        json=body,
+        headers={"X-API-Key": bad_key}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing API key"
+
+
+# ==================================================
+# 3. CORRECT API KEY
+# ==================================================
+
+@pytest.mark.parametrize(
+    "method,url,body,ok_status",
+    PROTECTED
+)
+async def test_correct_key_passes_auth(
+    client, method, url, body, ok_status
+):
+    response = await client.request(
+        method,
+        url,
+        json=body
+    )
+
+    assert response.status_code == ok_status
+
+
+# ==================================================
+# 4. HEADER NAME IS CASE-INSENSITIVE
+# ==================================================
+
+async def test_header_name_is_case_insensitive(anon_client):
+    response = await anon_client.delete(
+        "/products/999999",
+        headers={"x-api-key": TEST_KEY}
+    )
+
+    assert response.status_code == 404
+
+
+# ==================================================
+# 5. PUBLIC GET ENDPOINTS
+# ==================================================
+
+async def test_read_endpoints_need_no_key(anon_client):
+
+    response = await anon_client.get("/Hello")
+    assert response.status_code == 200
+
+    response = await anon_client.get("/products")
+    assert response.status_code == 200
+
+    response = await anon_client.get("/products/stats")
+    assert response.status_code != 401
+
+
+# ==================================================
+# 6. UNAUTHORIZED REQUESTS MUST NOT CHANGE DATABASE
+# ==================================================
+
+async def test_post_without_key_inserts_nothing(anon_client):
+
+    async with app.state.pool.acquire() as conn:
+        before = await conn.fetchval(
+            "SELECT COUNT(*) FROM products"
+        )
+
+    response = await anon_client.post(
+        "/products",
+        json=VALID_POST_BODY
+    )
+
+    assert response.status_code == 401
+
+    async with app.state.pool.acquire() as conn:
+        after = await conn.fetchval(
+            "SELECT COUNT(*) FROM products"
+        )
+
+    assert after == before
+
+
+async def test_patch_without_key_leaves_row_unchanged(anon_client):
+
+    original = (await seed_products([product_data()]))[0]
+
+    response = await anon_client.patch(
+        f"/products/{original['id']}",
+        json={"price": 5000}
+    )
+
+    assert response.status_code == 401
+
+    updated = await get_product_from_db(original["id"])
+
+    assert updated == original
+
+
+async def test_delete_without_key_keeps_the_row(anon_client):
+
+    original = (await seed_products([product_data()]))[0]
+
+    response = await anon_client.delete(
+        f"/products/{original['id']}"
+    )
+
+    assert response.status_code == 401
+
+    existing = await get_product_from_db(original["id"])
+
+    assert existing == original
+
+
+# ==================================================
+# 7. AUTHENTICATION BEFORE VALIDATION
+# ==================================================
+
+async def test_invalid_body_without_key_returns_401(anon_client):
+
+    response = await anon_client.post(
+        "/products",
+        json=[{"name": "A"}]
+    )
+
+    assert response.status_code == 401
+
+
+# ==================================================
+# 8. SERVER API KEY NOT CONFIGURED
+# ==================================================
+
+@pytest.mark.parametrize(
+    "server_key",
+    [None, ""],
+    ids=["none", "empty"]
+)
+async def test_missing_server_key_fails_closed_with_500(
+    client, monkeypatch, server_key
+):
+
+    monkeypatch.setattr(
+        Api_Key_Check,
+        "PRODUCT_API_KEY",
+        server_key
+    )
+
+    response = await client.delete(
+        "/products/999999",
+        headers={"X-API-Key": ""}
+    )
+
+    assert response.status_code == 500
+
+    assert response.json()["detail"] == "API key is not configured"
+
+
+# ==================================================
+# 9. NON-ASCII API KEY
+# ==================================================
+
+async def test_non_ascii_key_returns_401(monkeypatch):
+
+    monkeypatch.setattr(
+        Api_Key_Check,
+        "PRODUCT_API_KEY",
+        "correct-secret"
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await Api_Key_Check.verify_api_key("clé-secrète")
+
+    assert exc.value.status_code == 401
+
+
+3- test_gemini_helper.py:
+
+from types import SimpleNamespace
+
+import pytest
+from google.genai import errors, types
+from pydantic import BaseModel
+from tenacity import wait_none
+
+import gemini_helper as gh
+
+from gemini_helper import (
+    AIBlockedError,
+    AITimeoutError,
+    AIUpstreamError,
+    call_gemini,
+    is_retryable,
+)
+
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+
+def fake_response(
+    text="Hello world",
+    finish=types.FinishReason.STOP,
+    candidates=True,
+    block_reason=None,
+):
+    feedback = (
+        SimpleNamespace(block_reason=block_reason)
+        if block_reason
+        else None
+    )
+
+    return SimpleNamespace(
+        candidates=[
+            SimpleNamespace(finish_reason=finish)
+        ] if candidates else [],
+        text=text,
+        prompt_feedback=feedback,
+    )
+
+
+def api_error(code):
+    return errors.APIError(
+        code,
+        {"error": {"message": "boom", "status": "X"}}
+    )
+
+
+def mock_call(monkeypatch, *, response=None, exc=None):
+    """Replace _call_with_retry for ordinary helper tests."""
+
+    seen = {}
+
+    async def fake(prompt, config, timeout):
+        seen["prompt"] = prompt
+        seen["config"] = config
+        seen["timeout"] = timeout
+
+        if exc is not None:
+            raise exc
+
+        return response if response is not None else fake_response()
+
+    monkeypatch.setattr(
+        "gemini_helper._call_with_retry",
+        fake
+    )
+
+    return seen
+
+
+# --------------------------------------------------
+# Success tests
+# --------------------------------------------------
+
+async def test_returns_text(monkeypatch):
+    mock_call(
+        monkeypatch,
+        response=fake_response(text="A great product.")
+    )
+
+    assert await call_gemini("write something") == "A great product."
+
+
+async def test_text_is_stripped(monkeypatch):
+    mock_call(
+        monkeypatch,
+        response=fake_response(text="  padded text \n")
+    )
+
+    assert await call_gemini("x") == "padded text"
+
+
+async def test_prompt_and_timeout_are_passed_through(monkeypatch):
+    seen = mock_call(monkeypatch)
+
+    await call_gemini("my prompt", timeout=3.5)
+
+    assert seen["prompt"] == "my prompt"
+    assert seen["timeout"] == 3.5
+
+
+async def test_default_config_has_no_json_mode(monkeypatch):
+    seen = mock_call(monkeypatch)
+
+    await call_gemini("x", temperature=0.2)
+
+    assert seen["config"].temperature == 0.2
+    assert not seen["config"].response_mime_type
+
+
+class Filters(BaseModel):
+    category: str | None = None
+
+
+async def test_response_schema_turns_on_json_mode(monkeypatch):
+    seen = mock_call(
+        monkeypatch,
+        response=fake_response(text='{"category": "x"}')
+    )
+
+    await call_gemini("x", response_schema=Filters)
+
+    assert seen["config"].response_mime_type == "application/json"
+
+
+# --------------------------------------------------
+# Failure tests
+# --------------------------------------------------
+
+# def mock_call(monkeypatch, *, response=None, exc=None):
+#     """Replace _call_with_retry for ordinary helper tests."""
+
+#     seen = {}
+
+#     async def fake(prompt, config, timeout):
+#         seen["prompt"] = prompt
+#         seen["config"] = config
+#         seen["timeout"] = timeout
+
+#         if exc is not None:
+#             raise exc
+
+#         return response if response is not None else fake_response()
+
+#     monkeypatch.setattr(
+#         "gemini_helper._call_with_retry",
+#         fake
+#     )
+
+#     return seen
+
+@pytest.mark.parametrize(
+    "mock_kwargs, expected_error",
+    [
+        ({"exc": TimeoutError()}, AITimeoutError),
+        ({"exc": api_error(503)}, AIUpstreamError),
+
+        (
+            {
+                "response": fake_response(
+                    candidates=False,
+                    block_reason="SAFETY"
+                )
+            },
+            AIBlockedError
+        ),
+
+        (
+            {"response": fake_response(candidates=False)},
+            AIUpstreamError
+        ),
+
+        (
+            {
+                "response": fake_response(
+                    finish=types.FinishReason.SAFETY
+                )
+            },
+            AIBlockedError
+        ),
+
+        (
+            {
+                "response": fake_response(
+                    finish=types.FinishReason.MAX_TOKENS
+                )
+            },
+            AIUpstreamError
+        ),
+
+        (
+            {
+                "response": fake_response(
+                    finish=types.FinishReason.RECITATION
+                )
+            },
+            AIUpstreamError
+        ),
+
+        ({"response": fake_response(text=None)}, AIUpstreamError),
+        ({"response": fake_response(text="")}, AIUpstreamError),
+        ({"response": fake_response(text="   \n ")}, AIUpstreamError),
+    ],
+    ids=[
+        "timeout",
+        "api-error",
+        "prompt-blocked",
+        "no-candidates-no-reason",
+        "safety-finish",
+        "max-tokens",
+        "unexpected-finish",
+        "text-none",
+        "text-empty",
+        "text-whitespace",
+    ],
+)
+async def test_failures_raise_the_right_ai_error(
+    monkeypatch,
+    mock_kwargs,
+    expected_error
+):
+    mock_call(monkeypatch, **mock_kwargs)
+
+    with pytest.raises(expected_error):
+        await call_gemini("x")
+
+
+async def test_api_error_keeps_the_status_code(monkeypatch):
+    mock_call(monkeypatch, exc=api_error(429))
+
+    with pytest.raises(AIUpstreamError) as info:
+        await call_gemini("x")
+
+    assert info.value.code == 429
+
+
+async def test_timeout_is_not_reported_as_upstream_error(monkeypatch):
+    mock_call(monkeypatch, exc=TimeoutError())
+
+    with pytest.raises(AITimeoutError) as info:
+        await call_gemini("x")
+
+    assert not isinstance(info.value, AIUpstreamError)
+
+
+# --------------------------------------------------
+# Retry predicate tests
+# --------------------------------------------------
+
+@pytest.mark.parametrize(
+    "code",
+    [408, 429, 500, 502, 503, 504]
+)
+def test_retryable_status_codes(code):
+    assert is_retryable(api_error(code)) is True
+
+
+@pytest.mark.parametrize(
+    "code",
+    [400, 401, 403, 404]
+)
+def test_non_retryable_status_codes(code):
+    assert is_retryable(api_error(code)) is False
+
+
+def test_timeout_is_retryable():
+    assert is_retryable(TimeoutError()) is True
+
+
+def test_other_exceptions_are_not_retryable():
+    assert is_retryable(ValueError("boom")) is False
+
+
+# --------------------------------------------------
+# Helpers for actual retry behavior
+# --------------------------------------------------
+
+def patch_client(monkeypatch, outcomes):
+    """
+    Replace the actual Gemini API call.
+
+    Keep the real Tenacity retry mechanism active.
+    """
+
+    calls = {"n": 0}
+
+    async def fake_generate_content(**kwargs):
+        outcome = outcomes[calls["n"]]
+        calls["n"] += 1
+
+        if isinstance(outcome, Exception):
+            raise outcome
+
+        return outcome
+
+    monkeypatch.setattr(
+        "gemini_helper.client.aio.models.generate_content",
+        fake_generate_content
+    )
+
+    monkeypatch.setattr(
+        "gemini_helper._call_with_retry",
+        gh._call_with_retry.retry_with(wait=wait_none())
+    )
+    return calls
+
+
+# --------------------------------------------------
+# Actual retry tests
+# --------------------------------------------------
+
+async def test_retries_a_transient_error_then_succeeds(monkeypatch):
+
+    calls = patch_client(
+        monkeypatch,
+        [
+            api_error(503),
+            api_error(503),
+            fake_response(text="ok")
+        ]
+    )
+
+    assert await call_gemini("x") == "ok"
+    assert calls["n"] == 3
+
+
+async def test_does_not_retry_a_non_retryable_error(monkeypatch):
+
+    calls = patch_client(
+        monkeypatch,
+        [
+            api_error(400),
+            fake_response()
+        ]
+    )
+
+    with pytest.raises(AIUpstreamError):
+        await call_gemini("x")
+
+    assert calls["n"] == 1
+
+
+async def test_gives_up_after_three_attempts(monkeypatch):
+
+    calls = patch_client(
+        monkeypatch,
+        [api_error(503)] * 5
+    )
+
+    with pytest.raises(AIUpstreamError):
+        await call_gemini("x")
+
+    assert calls["n"] == 3
+
+
+4- test_get_products.py:
+from main import app
+import pytest
+import asyncio
+from gemini_helper import (
+    AIError,
+    AITimeoutError,
+    AIBlockedError,
+    AIUpstreamError,
+)
+from helpers import product_data, seed_products
+
+# TESTS --> @app.get("/products",response_model=list[Response])
+
+# 1. Get all products and check their order
+async def test_get_all_products(client):
+    await seed_products([
+        {
+            "name": "Cotton T-Shirt",
+            "description": "Comfortable shirt",
+            "category": "Clothing",
+            "price": 1000,
+            "stock": 10,
+            "rating": 4.5
+        },
+        {
+            "name": "Gaming Laptop",
+            "description": "Powerful laptop",
+            "category": "Electronics",
+            "price": 150000,
+            "stock": 5,
+            "rating": 4.8
+        }
+    ])
+    response = await client.get("/products")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["name"] == "Cotton T-Shirt"
+    assert data[1]["name"] == "Gaming Laptop"
+    assert data[0]["price"] == 1000
+    assert data[1]["price"] == 150000
+
+
+# 2. Get products when database is empty
+async def test_get_products_empty_database(client):
+    response = await client.get("/products")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# 3. Filter products by category (case-insensitive)
+async def test_get_products_by_category(client):
+    await seed_products([
+        {
+            "name": "Cotton T-Shirt",
+            "description": "Comfortable shirt",
+            "category": "Clothing",
+            "price": 1000,
+            "stock": 10,
+            "rating": 4.5
+        },
+        {
+            "name": "Gaming Laptop",
+            "description": "Powerful laptop",
+            "category": "Electronics",
+            "price": 150000,
+            "stock": 5,
+            "rating": 4.8
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"category": "electronics"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Gaming Laptop"
+    assert data[0]["category"] == "Electronics"
+
+
+# 4. Category with no matching products
+async def test_get_products_category_no_match(client):
+    await seed_products([
+        {
+            "name": "Gaming Laptop",
+            "description": "Powerful laptop",
+            "category": "Electronics",
+            "price": 150000,
+            "stock": 5,
+            "rating": 4.8
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"category": "Furniture"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# 5. Minimum price filter
+async def test_get_products_min_price_filter(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 100,
+            "stock": 10,
+            "rating": 4.0
+        },
+        {
+            "name": "Product B",
+            "description": "Second product",
+            "category": "Electronics",
+            "price": 500,
+            "stock": 20,
+            "rating": 4.5
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"min_price": 500}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Product B"
+    assert data[0]["price"] == 500
+
+
+# 6. Maximum price filter
+async def test_get_products_max_price_filter(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 100,
+            "stock": 10,
+            "rating": 4.0
+        },
+        {
+            "name": "Product B",
+            "description": "Second product",
+            "category": "Electronics",
+            "price": 500,
+            "stock": 20,
+            "rating": 4.5
+        },
+        {
+            "name": "Product C",
+            "description": "Third product",
+            "category": "Electronics",
+            "price": 800,
+            "stock": 30,
+            "rating": 4.8
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"max_price": 500}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 2
+    assert [p["name"] for p in data] == ["Product A", "Product B"]
+
+
+# 7. Minimum and maximum price together
+async def test_get_products_price_range(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 100,
+            "stock": 10,
+            "rating": 4.0
+        },
+        {
+            "name": "Product B",
+            "description": "Second product",
+            "category": "Electronics",
+            "price": 300,
+            "stock": 20,
+            "rating": 4.5
+        },
+        {
+            "name": "Product C",
+            "description": "Third product",
+            "category": "Electronics",
+            "price": 500,
+            "stock": 30,
+            "rating": 4.8
+        },
+        {
+            "name": "Product D",
+            "description": "Fourth product",
+            "category": "Electronics",
+            "price": 700,
+            "stock": 40,
+            "rating": 4.2
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"min_price": 300, "max_price": 500}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 2
+    assert [p["name"] for p in data] == ["Product B", "Product C"]
+
+
+# 8. Category and both price filters together
+async def test_get_products_all_filters(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 200,
+            "stock": 10,
+            "rating": 4.0
+        },
+        {
+            "name": "Product B",
+            "description": "Second product",
+            "category": "Electronics",
+            "price": 400,
+            "stock": 20,
+            "rating": 4.5
+        },
+        {
+            "name": "Product C",
+            "description": "Third product",
+            "category": "Electronics",
+            "price": 800,
+            "stock": 30,
+            "rating": 4.8
+        },
+        {
+            "name": "Product D",
+            "description": "Fourth product",
+            "category": "Clothing",
+            "price": 400,
+            "stock": 40,
+            "rating": 4.2
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={
+            "category": "electronics",
+            "min_price": 300,
+            "max_price": 500
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Product B"
+
+
+# 9. Price filters without category
+async def test_get_products_price_filters_without_category(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 100,
+            "stock": 10,
+            "rating": 4.0
+        },
+        {
+            "name": "Product B",
+            "description": "Second product",
+            "category": "Clothing",
+            "price": 300,
+            "stock": 20,
+            "rating": 4.5
+        },
+        {
+            "name": "Product C",
+            "description": "Third product",
+            "category": "Electronics",
+            "price": 500,
+            "stock": 30,
+            "rating": 4.8
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"min_price": 200, "max_price": 400}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Product B"
+
+
+# 10. Invalid price query parameters
+async def test_get_products_invalid_price_parameters(client):
+    response1 = await client.get(
+        "/products",
+        params={"min_price": -100}
+    )
+
+    response2 = await client.get(
+        "/products",
+        params={"max_price": "abc"}
+    )
+
+    assert response1.status_code == 422
+    assert response2.status_code == 422
+
+
+# 11. Minimum price greater than maximum price
+async def test_get_products_min_price_greater_than_max_price(client):
+    await seed_products([
+        {
+            "name": "Product A",
+            "description": "First product",
+            "category": "Electronics",
+            "price": 300,
+            "stock": 10,
+            "rating": 4.0
+        }
+    ])
+
+    response = await client.get(
+        "/products",
+        params={"min_price": 500, "max_price": 200}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+5- test_patch_products.py
+
+from main import app
+import pytest
+import asyncio
+from gemini_helper import (
+    AIError,
+    AITimeoutError,
+    AIBlockedError,
+    AIUpstreamError,
+)
+from helpers import product_data, seed_products, get_product_from_db
+
+# Tests --> @app.patch("/products/{product_id}",response_model=Response)
+# 1. Update one field and preserve the remaining fields
+async def test_patch_product_single_field(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"price": 2000}
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["price"] == 2000
+    assert data["name"] == original["name"]
+    assert data["description"] == original["description"]
+    assert data["category"] == original["category"]
+    assert data["stock"] == original["stock"]
+    assert data["rating"] == original["rating"]
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["price"] == 2000
+
+
+# 2. Update multiple fields together
+async def test_patch_product_multiple_fields(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={
+            "name": "Updated Product",
+            "price": 2500,
+            "stock": 20
+        }
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["name"] == "Updated Product"
+    assert data["price"] == 2500
+    assert data["stock"] == 20
+
+    assert data["description"] == original["description"]
+    assert data["category"] == original["category"]
+    assert data["rating"] == original["rating"]
+    
+    # checking through database directly
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["name"] == "Updated Product"
+    assert db_product["price"] == 2500
+    assert db_product["stock"] == 20
+
+
+# 3. Ensure other products are not modified
+async def test_patch_product_does_not_modify_other_products(client):
+    products = await seed_products([
+        product_data(name="Product A", price=1000),
+        product_data(name="Product B", price=2000)
+    ])
+
+    product_a, product_b = products
+
+    response = await client.patch(
+        f"/products/{product_a['id']}",
+        json={"price": 5000}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["price"] == 5000
+    
+    db_product_a = await get_product_from_db(product_a["id"])
+    db_product_b = await get_product_from_db(product_b["id"])
+
+    assert db_product_a["price"] == 5000
+    assert db_product_b == product_b
+
+
+# 4. Test every individual updateable field
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("name", "New Product Name"),
+        ("description", "New description"),
+        ("category", "Clothing"),
+        ("price", 2500),
+        ("stock", 50),
+        ("rating", 4.9)
+    ]
+)
+async def test_patch_product_each_field(client, field, value):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={field: value}
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    for key, original_value in original.items():
+        if key == field:
+            assert updated[key] == value
+        else:
+            assert updated[key] == original_value
+
+# 5. Valid boundary values
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("stock", 0),
+        ("rating", 0),
+        ("rating", 5)
+    ]
+)
+async def test_patch_product_boundary_values(client, field, value):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={field: value}
+    )
+
+    assert response.status_code == 200
+    assert response.json()[field] == value
+
+
+# 6. Update a field with its existing value
+async def test_patch_product_same_value(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"price": float(original["price"])}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["price"] == original["price"]
+
+
+# 7. Explicitly set nullable description to NULL
+async def test_patch_product_description_null(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"description": None}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["description"] is None
+
+
+# 8. Product does not exist
+async def test_patch_product_not_found(client):
+    response = await client.patch(
+        "/products/999999",
+        json={"price": 2000}
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product Not Found"
+
+
+# 9. Invalid product ID
+async def test_patch_product_invalid_id(client):
+    response = await client.patch(
+        "/products/abc",
+        json={"price": 2000}
+    )
+
+    assert response.status_code == 422
+
+
+# 10. Empty body or unknown fields
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"unknown_field": "something"}
+    ]
+)
+async def test_patch_product_empty_or_unknown_payload(client, payload):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json=payload
+    )
+
+    assert response.status_code == 422
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product == original
+
+
+# 11. Invalid values
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "A"},
+        {"name": "X" * 101},
+        {"price": 0},
+        {"price": -100},
+        {"stock": -1},
+        {"rating": 5.1},
+        {"rating": -0.1},
+        {"price": "free"}
+    ]
+)
+async def test_patch_product_invalid_values(client, payload):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json=payload
+    )
+
+    assert response.status_code == 422
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product == original
+
+
+# 12. Name cannot be NULL (assuming NOT NULL constraint)
+async def test_patch_product_name_null(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"name": None}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid data format or missing required value"
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product == original
+
+
+# 13. Stock integer overflow (assuming PostgreSQL INTEGER)
+async def test_patch_product_stock_overflow(client):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"stock": 3_000_000_000}
+    )
+
+    assert response.status_code == 400
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product == original
+
+
+async def test_patch_product_duplicate_name(client):
+    products = await seed_products([
+        product_data(name="Product A"),
+        product_data(name="Product B")
+    ])
+
+    product_a, product_b = products
+
+    response = await client.patch(
+        f"/products/{product_b['id']}",
+        json={"name": product_a["name"]}
+    )
+
+    assert response.status_code == 409
+
+    db_product_b = await get_product_from_db(product_b["id"])
+    assert db_product_b == product_b
+
+
+# Tests --> @app.patch("/products/{product_id}") with regenerate_description
+
+def fake_gemini(monkeypatch, text="Fresh AI description."):
+    """Mock main.call_gemini and return the list of prompts it receives."""
+    prompts = []
+
+    async def fake_call_gemini(prompt):
+        prompts.append(prompt)
+        return text
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+    return prompts
+
+
+# R1. New description is generated and saved
+async def test_patch_regenerate_description_success(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"regenerate_description": True}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] == "Fresh AI description."
+    assert len(prompts) == 1
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["description"] == "Fresh AI description."
+
+
+# R2. Every other field stays the same
+async def test_patch_regenerate_keeps_other_fields(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    fake_gemini(monkeypatch)
+
+    await client.patch(
+        f"/products/{original['id']}",
+        json={"regenerate_description": True}
+    )
+
+    db_product = await get_product_from_db(original["id"])
+    for key, value in original.items():
+        if key != "description":
+            assert db_product[key] == value
+
+
+# R3. Prompt uses the existing name and category
+async def test_patch_regenerate_prompt_uses_existing_values(client, monkeypatch):
+    original = (await seed_products([
+        product_data(name="Wireless Mouse", category="Electronics")
+    ]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    await client.patch(
+        f"/products/{original['id']}",
+        json={"regenerate_description": True}
+    )
+
+    assert "Wireless Mouse" in prompts[0]
+    assert "Electronics" in prompts[0]
+
+
+# R4. Prompt uses the NEW name when it changes in the same request
+async def test_patch_regenerate_prompt_uses_new_name(client, monkeypatch):
+    original = (await seed_products([
+        product_data(name="Wireless Mouse")
+    ]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"name": "Gaming Mouse", "regenerate_description": True}
+    )
+
+    assert response.status_code == 200
+    assert "Gaming Mouse" in prompts[0]
+    assert "Wireless Mouse" not in prompts[0]
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["name"] == "Gaming Mouse"
+    assert db_product["description"] == "Fresh AI description."
+
+
+# R5. Other products are not modified
+async def test_patch_regenerate_does_not_modify_other_products(client, monkeypatch):
+    product_a, product_b = await seed_products([
+        product_data(name="Product A"),
+        product_data(name="Product B")
+    ])
+    fake_gemini(monkeypatch)
+
+    await client.patch(
+        f"/products/{product_a['id']}",
+        json={"regenerate_description": True}
+    )
+
+    assert await get_product_from_db(product_b["id"]) == product_b
+
+
+# R6. AI failures: right status code, and the row does not change at all
+@pytest.mark.parametrize(
+    "exc,expected_status,expected_detail",
+    [
+        (AITimeoutError("Gemini timed out"), 504,
+         "AI service timed out. Please try again."),
+        (AIBlockedError("Request blocked"), 400,
+         "AI request was blocked."),
+        (AIUpstreamError("Gemini unavailable", code=503), 503,
+         "AI service is temporarily unavailable."),
+        (AIError("Unexpected AI error"), 500,
+         "An unexpected AI error occurred."),
+    ],
+    ids=["timeout", "blocked", "upstream", "unexpected"]
+)
+async def test_patch_regenerate_ai_failure_leaves_row_unchanged(
+    client, monkeypatch, exc, expected_status, expected_detail
+):
+    original = (await seed_products([product_data()]))[0]
+
+    async def fake_call_gemini(prompt):
+        raise exc
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"name": "Renamed Product", "regenerate_description": True}
+    )
+
+    assert response.status_code == expected_status
+    assert response.json()["detail"] == expected_detail
+
+    # not even the name from the same request may be saved
+    assert await get_product_from_db(original["id"]) == original
+
+
+# R7. Product does not exist: 404 and Gemini is never called
+async def test_patch_regenerate_product_not_found(client, monkeypatch):
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        "/products/999999",
+        json={"regenerate_description": True}
+    )
+
+    assert response.status_code == 404
+    assert prompts == []
+
+
+# R8. Flag together with a manual description is rejected
+async def test_patch_regenerate_with_manual_description_returns_422(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"description": "My own text", "regenerate_description": True}
+    )
+
+    assert response.status_code == 422
+    assert prompts == []
+    assert await get_product_from_db(original["id"]) == original
+
+
+# R9. Flag set to false and nothing else: nothing to update
+async def test_patch_regenerate_false_alone_returns_422(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"regenerate_description": False}
+    )
+
+    assert response.status_code == 422
+    assert prompts == []
+    assert await get_product_from_db(original["id"]) == original
+
+
+# R10. Flag with name = null: 400 and Gemini is never called
+async def test_patch_regenerate_with_null_name_returns_400(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"name": None, "regenerate_description": True}
+    )
+
+    assert response.status_code == 400
+    assert prompts == []
+    assert await get_product_from_db(original["id"]) == original
+
+
+# R11. A normal PATCH (no flag) must never call Gemini
+async def test_patch_without_flag_does_not_call_gemini(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+
+    async def fake_call_gemini(prompt):
+        pytest.fail("Gemini should not have been called")
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"price": 2500}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["price"] == 2500
+
+    db_product = await get_product_from_db(original["id"])
+    assert db_product["description"] == original["description"]
+
+
+# R12. Flag set to false plus a normal field works like a normal PATCH
+async def test_patch_regenerate_false_with_other_field(client, monkeypatch):
+    original = (await seed_products([product_data()]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"stock": 99, "regenerate_description": False}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["stock"] == 99
+    assert prompts == []
+
+6 - test_post_products.py:
+
+from main import app
+import pytest
+import asyncio
+from gemini_helper import (
+    AIError,
+    AITimeoutError,
+    AIBlockedError,
+    AIUpstreamError,
+)
+from helpers import product_data, seed_products
+
+# Tests --> @app.post("/products",response_model=list[Response])
+# 1. Manual description
+async def test_create_product_manual_description(client):
+
+    response = await client.post( 
+        "/products",
+        json=[
+            {
+                "name": "Cotton T-Shirt",
+                "description": "A soft cotton T-shirt.",
+                "category": "Clothing",
+                "price": 1200,
+                "stock": 10,
+                "rating": 4.5,
+                "ai_description": False
+            }
+        ]
+    )
+
+    assert response.status_code == 200
+    async with app.state.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM products WHERE name = $1",
+                "Cotton T-Shirt"
+            )
+    
+    assert row is not None
+    assert row["name"]=="Cotton T-Shirt"
+    assert row["description"] == "A soft cotton T-shirt."
+    data = response.json()
+    assert data[0]["description"] == "A soft cotton T-shirt."
+
+
+# 2. AI-generated description
+async def test_create_product_ai_description(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        return "A comfortable cotton T-shirt."
+
+    monkeypatch.setattr(
+        "main.call_gemini",
+        fake_call_gemini
+    )
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "Cotton T-Shirt",
+                "category": "Clothing",
+                "price": 1200,
+                "stock": 10,
+                "rating": 4.5,
+                "ai_description": True
+            }
+        ]
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["description"] == (
+        "A comfortable cotton T-shirt."
+    )
+
+
+# 3. Gemini should not be called when AI is disabled
+async def test_gemini_not_called_for_manual_description(
+    client, monkeypatch
+):
+
+    async def fake_call_gemini(prompt):
+        pytest.fail("Gemini should not have been called")
+
+    monkeypatch.setattr(
+        "main.call_gemini",
+        fake_call_gemini
+    )
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "Laptop",
+                "description": "A powerful laptop.",
+                "category": "Electronics",
+                "price": 50000,
+                "stock": 5,
+                "rating": 4.5,
+                "ai_description": False
+            }
+        ]
+    )
+
+    assert response.status_code == 200
+
+
+# 4. Invalid product data
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "description": "Missing name",
+            "price": 1000,
+            "stock": 5
+        },
+        {
+            "name": "A",
+            "description": "Invalid short name",
+            "price": 1000,
+            "stock": 5
+        },
+        {
+            "name": "Laptop",
+            "description": "Laptop description",
+            "price": -100,
+            "stock": 5
+        },
+        {
+            "name": "Laptop",
+            "description": "Laptop description",
+            "price": 1000,
+            "stock": -1
+        }
+    ]
+)
+async def test_invalid_product_returns_422(client, payload):
+
+    response = await client.post(
+        "/products",
+        json=[payload]
+    )
+
+    assert response.status_code == 422
+
+
+# 5. Empty product list
+async def test_empty_product_list(client):
+
+    response = await client.post(
+        "/products",
+        json=[]
+    )
+
+    assert response.status_code == 400
+
+
+# 6. AI failure - no database insertion
+async def test_ai_failure_no_database_insert(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        raise AIUpstreamError(
+            "Gemini service unavailable",
+            code=503
+        )
+
+    monkeypatch.setattr(
+        "main.call_gemini",
+        fake_call_gemini
+    )
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "AI Failure Product",
+                "category": "Electronics",
+                "price": 1000,
+                "stock": 5,
+                "rating": 4.5,
+                "ai_description": True
+            }
+        ]
+    )
+
+    assert response.status_code == 503
+
+    async with app.state.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id FROM products WHERE name = $1",
+            "AI Failure Product"
+        )
+
+    assert row is None
+
+
+# 7. Bulk AI failure - no products should be inserted
+async def test_bulk_ai_failure_no_insert(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+
+        if "Product B" in prompt:
+            raise AIUpstreamError(
+                "Gemini service unavailable",
+                code=503
+            )
+
+        return "A good product description."
+
+    monkeypatch.setattr(
+        "main.call_gemini",
+        fake_call_gemini
+    )
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "Product A",
+                "category": "Clothing",
+                "price": 1000,
+                "stock": 5,
+                "rating": 4.0,
+                "ai_description": True
+            },
+            {
+                "name": "Product B",
+                "category": "Clothing",
+                "price": 1500,
+                "stock": 8,
+                "rating": 4.5,
+                "ai_description": True
+            }
+        ]
+    )
+
+    assert response.status_code == 503
+
+    async with app.state.pool.acquire() as conn:
+        count = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM products
+            WHERE name = ANY($1::text[])
+            """,
+            ["Product A", "Product B"]
+        )
+
+    assert count == 0
+
+
+# Test-8 
+async def test_failed_product_cancels_remaining_tasks(client, monkeypatch):
+
+    a_started = asyncio.Event()
+    a_cancelled = asyncio.Event()
+
+    async def fake_process_product(product):
+
+        if product.name == "Product A":
+
+            a_started.set()
+
+            try:
+                # Keep Product A running until it gets cancelled.
+                await asyncio.Future()
+
+            except asyncio.CancelledError:
+                a_cancelled.set()
+                raise
+
+        elif product.name == "Product B":
+
+            # Wait until Product A has actually started.
+            await a_started.wait()
+
+            # Simulate a processing failure.
+            raise RuntimeError("Simulated processing failure")
+
+    monkeypatch.setattr(
+        "main.process_product",
+        fake_process_product
+    )
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "Product A",
+                "description": "Description for product A",
+                "category": "Electronics",
+                "price": 1000,
+                "stock": 5,
+                "rating": 4.0,
+                "ai_description": False
+            },
+            {
+                "name": "Product B",
+                "description": "Description for product B",
+                "category": "Electronics",
+                "price": 1500,
+                "stock": 8,
+                "rating": 4.5,
+                "ai_description": False
+            }
+        ]
+    )
+
+    assert response.status_code == 500
+    assert a_cancelled.is_set()
+
+# Test-9
+async def test_ai_timeout_returns_504(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        raise AITimeoutError("Gemini timed out")
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.post(
+        "/products",
+        json=[{
+            "name": "Product A",
+            "price": 100,
+            "stock": 5,
+            "ai_description": True
+        }]
+    )
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == (
+        "AI service timed out. Please try again."
+    )
+
+# Test-10
+async def test_ai_blocked_returns_400(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        raise AIBlockedError("Request blocked")
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.post(
+        "/products",
+        json=[{
+            "name": "Product A",
+            "price": 100,
+            "stock": 5,
+            "ai_description": True
+        }]
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "AI request was blocked."
+
+#Test-11
+async def tei_upstream_error_returns_503(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        raise AIUpstreamError("Gemini unavailable", code=503)
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.post(
+        "/products",
+        json=[{
+            "name": "Product A",
+            "price": 100,
+            "stock": 5,
+            "ai_description": True
+        }]
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "AI service is temporarily unavailable."
+    )
+
+# Test-12
+async def test_unexpected_ai_error_returns_500(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        raise AIError("Unexpected AI error")
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.post(
+        "/products",
+        json=[{
+            "name": "Product A",
+            "price": 100,
+            "stock": 5,
+            "ai_description": True
+        }]
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == (
+        "An unexpected AI error occurred."
+    )
+
+# Test-13
+
+async def test_bulk_ai_success(client, monkeypatch):
+
+    async def fake_call_gemini(prompt):
+        if "Product A" in prompt:
+            return "Description for Product A."
+
+        if "Product B" in prompt:
+            return "Description for Product B."
+
+        raise AssertionError("Unexpected product in prompt")
+
+    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+
+    response = await client.post(
+        "/products",
+        json=[
+            {
+                "name": "Product A",
+                "price": 100,
+                "stock": 5,
+                "ai_description": True
+            },
+            {
+                "name": "Product B",
+                "price": 200,
+                "stock": 10,
+                "ai_description": True
+            }
+        ]
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    assert data[0]["description"] == "Description for Product A."
+    assert data[1]["description"] == "Description for Product B."
+    async with app.state.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT name, description
+            FROM products
+            WHERE name = ANY($1::text[])
+            """,
+            ["Product A", "Product B"]
+        )
+
+    saved_products = {
+        row["name"]: row["description"]
+        for row in rows
+    }
+
+    assert len(saved_products) == 2
+
+    assert saved_products == {
+        "Product A": "Description for Product A.",
+        "Product B": "Description for Product B."
+    }
+
+

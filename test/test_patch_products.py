@@ -1,28 +1,31 @@
-from main import app
 import pytest
-import asyncio
+
 from gemini_helper import (
     AIError,
     AITimeoutError,
     AIBlockedError,
     AIUpstreamError,
+    AIQuotaError,
 )
-from helpers import product_data, seed_products, get_product_from_db
+from helpers import (
+    fake_gemini,
+    fake_gemini_error,
+    get_product_from_db,
+    product_data,
+    seed_products,
+)
 
-# Tests --> @app.patch("/products/{product_id}",response_model=Response)
-# 1. Update one field and preserve the remaining fields
+
+# ================================================================ manual PATCH
 async def test_patch_product_single_field(client):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"price": 2000}
+        f"/products/{original['id']}", json={"price": 2000}
     )
 
     assert response.status_code == 200
-
     data = response.json()
-
     assert data["price"] == 2000
     assert data["name"] == original["name"]
     assert data["description"] == original["description"]
@@ -30,67 +33,47 @@ async def test_patch_product_single_field(client):
     assert data["stock"] == original["stock"]
     assert data["rating"] == original["rating"]
 
-    db_product = await get_product_from_db(original["id"])
-    assert db_product["price"] == 2000
+    assert (await get_product_from_db(original["id"]))["price"] == 2000
 
 
-# 2. Update multiple fields together
 async def test_patch_product_multiple_fields(client):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={
-            "name": "Updated Product",
-            "price": 2500,
-            "stock": 20
-        }
+        json={"name": "Updated Product", "price": 2500, "stock": 20},
     )
 
     assert response.status_code == 200
-
     data = response.json()
-
     assert data["name"] == "Updated Product"
     assert data["price"] == 2500
     assert data["stock"] == 20
-
     assert data["description"] == original["description"]
     assert data["category"] == original["category"]
     assert data["rating"] == original["rating"]
-    
-    # checking through database directly
+
     db_product = await get_product_from_db(original["id"])
     assert db_product["name"] == "Updated Product"
     assert db_product["price"] == 2500
     assert db_product["stock"] == 20
 
 
-# 3. Ensure other products are not modified
 async def test_patch_product_does_not_modify_other_products(client):
-    products = await seed_products([
+    product_a, product_b = await seed_products([
         product_data(name="Product A", price=1000),
-        product_data(name="Product B", price=2000)
+        product_data(name="Product B", price=2000),
     ])
 
-    product_a, product_b = products
-
     response = await client.patch(
-        f"/products/{product_a['id']}",
-        json={"price": 5000}
+        f"/products/{product_a['id']}", json={"price": 5000}
     )
 
     assert response.status_code == 200
-    assert response.json()["price"] == 5000
-    
-    db_product_a = await get_product_from_db(product_a["id"])
-    db_product_b = await get_product_from_db(product_b["id"])
-
-    assert db_product_a["price"] == 5000
-    assert db_product_b == product_b
+    assert (await get_product_from_db(product_a["id"]))["price"] == 5000
+    assert await get_product_from_db(product_b["id"]) == product_b
 
 
-# 4. Test every individual updateable field
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -99,15 +82,14 @@ async def test_patch_product_does_not_modify_other_products(client):
         ("category", "Clothing"),
         ("price", 2500),
         ("stock", 50),
-        ("rating", 4.9)
-    ]
+        ("rating", 4.9),
+    ],
 )
 async def test_patch_product_each_field(client, field, value):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={field: value}
+        f"/products/{original['id']}", json={field: value}
     )
 
     assert response.status_code == 200
@@ -118,215 +100,177 @@ async def test_patch_product_each_field(client, field, value):
         else:
             assert updated[key] == original_value
 
-# 5. Valid boundary values
+
 @pytest.mark.parametrize(
     "field,value",
-    [
-        ("stock", 0),
-        ("rating", 0),
-        ("rating", 5)
-    ]
+    [("stock", 0), ("rating", 0), ("rating", 5), ("price", 0)],
+    ids=["stock-0", "rating-0", "rating-5", "price-0"],
 )
 async def test_patch_product_boundary_values(client, field, value):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={field: value}
+        f"/products/{original['id']}", json={field: value}
     )
 
     assert response.status_code == 200
     assert response.json()[field] == value
 
 
-# 6. Update a field with its existing value
 async def test_patch_product_same_value(client):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"price": float(original["price"])}
+        json={"price": float(original["price"])},
     )
 
     assert response.status_code == 200
     assert response.json()["price"] == original["price"]
 
 
-# 7. Explicitly set nullable description to NULL
-async def test_patch_product_description_null(client):
+async def test_patch_product_rating_null_is_allowed(client):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"description": None}
+        f"/products/{original['id']}", json={"rating": None}
     )
-    assert response.status_code == 400
 
-    db_product = await get_product_from_db(original["id"])
-    assert db_product["description"] is not None
+    assert response.status_code == 200
+    assert response.json()["rating"] is None
+    assert (await get_product_from_db(original["id"]))["rating"] is None
 
 
-# 8. Product does not exist
-async def test_patch_product_not_found(client):
+@pytest.mark.parametrize("category", [None, "", "   "], ids=["null", "empty", "blank"])
+async def test_patch_product_null_or_blank_category_becomes_other(client, category):
+    original = (await seed_products([product_data(category="Electronics")]))[0]
+
     response = await client.patch(
-        "/products/999999",
-        json={"price": 2000}
+        f"/products/{original['id']}", json={"category": category}
     )
+
+    assert response.status_code == 200
+    assert response.json()["category"] == "Other"
+    assert (await get_product_from_db(original["id"]))["category"] == "Other"
+
+
+@pytest.mark.parametrize(
+    "field", ["name", "description", "price", "stock"]
+)
+async def test_patch_product_null_in_required_field_returns_422(client, field):
+    original = (await seed_products([product_data()]))[0]
+
+    response = await client.patch(
+        f"/products/{original['id']}", json={field: None}
+    )
+
+    assert response.status_code == 422
+    assert await get_product_from_db(original["id"]) == original
+
+
+# ------------------------------------------------------------- bad requests
+async def test_patch_product_not_found(client):
+    response = await client.patch("/products/999999", json={"price": 2000})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Product Not Found"
 
 
-# 9. Invalid product ID
 async def test_patch_product_invalid_id(client):
-    response = await client.patch(
-        "/products/abc",
-        json={"price": 2000}
-    )
+    response = await client.patch("/products/abc", json={"price": 2000})
 
     assert response.status_code == 422
 
 
-# 10. Empty body or unknown fields
 @pytest.mark.parametrize(
-    "payload",
-    [
-        {},
-        {"unknown_field": "something"}
-    ]
+    "payload", [{}, {"unknown_field": "something"}], ids=["empty", "unknown-field"]
 )
 async def test_patch_product_empty_or_unknown_payload(client, payload):
     original = (await seed_products([product_data()]))[0]
 
-    response = await client.patch(
-        f"/products/{original['id']}",
-        json=payload
-    )
+    response = await client.patch(f"/products/{original['id']}", json=payload)
 
     assert response.status_code == 422
-
-    db_product = await get_product_from_db(original["id"])
-    assert db_product == original
+    assert await get_product_from_db(original["id"]) == original
 
 
-# 11. Invalid values
 @pytest.mark.parametrize(
     "payload",
     [
         {"name": "A"},
         {"name": "X" * 101},
-        {"price": 0},
+        {"price": -0.01},
         {"price": -100},
+        {"price": "free"},
         {"stock": -1},
+        {"stock": 1.5},
         {"rating": 5.1},
         {"rating": -0.1},
-        {"price": "free"}
-    ]
+    ],
+    ids=[
+        "name-short", "name-long", "price-tiny-negative", "price-negative",
+        "price-text", "stock-negative", "stock-fraction", "rating-high",
+        "rating-low",
+    ],
 )
 async def test_patch_product_invalid_values(client, payload):
     original = (await seed_products([product_data()]))[0]
 
-    response = await client.patch(
-        f"/products/{original['id']}",
-        json=payload
-    )
+    response = await client.patch(f"/products/{original['id']}", json=payload)
 
     assert response.status_code == 422
-
-    db_product = await get_product_from_db(original["id"])
-    assert db_product == original
+    assert await get_product_from_db(original["id"]) == original
 
 
-# 12. Name cannot be NULL (assuming NOT NULL constraint)
-async def test_patch_product_name_null(client):
-    original = (await seed_products([product_data()]))[0]
-
-    response = await client.patch(
-        f"/products/{original['id']}",
-        json={"name": None}
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid data format or missing required value"
-
-    db_product = await get_product_from_db(original["id"])
-    assert db_product == original
-
-
-# 13. Stock integer overflow (assuming PostgreSQL INTEGER)
 async def test_patch_product_stock_overflow(client):
     original = (await seed_products([product_data()]))[0]
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"stock": 3_000_000_000}
+        f"/products/{original['id']}", json={"stock": 3_000_000_000}
     )
 
     assert response.status_code == 400
-
-    db_product = await get_product_from_db(original["id"])
-    assert db_product == original
+    assert await get_product_from_db(original["id"]) == original
 
 
 async def test_patch_product_duplicate_name(client):
-    products = await seed_products([
+    product_a, product_b = await seed_products([
         product_data(name="Product A"),
-        product_data(name="Product B")
+        product_data(name="Product B"),
     ])
 
-    product_a, product_b = products
-
     response = await client.patch(
-        f"/products/{product_b['id']}",
-        json={"name": product_a["name"]}
+        f"/products/{product_b['id']}", json={"name": product_a["name"]}
     )
 
     assert response.status_code == 409
-
-    db_product_b = await get_product_from_db(product_b["id"])
-    assert db_product_b == product_b
-
-
-# Tests --> @app.patch("/products/{product_id}") with regenerate_description
-
-def fake_gemini(monkeypatch, text="Fresh AI description."):
-    """Mock main.call_gemini and return the list of prompts it receives."""
-    prompts = []
-
-    async def fake_call_gemini(prompt):
-        prompts.append(prompt)
-        return text
-
-    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
-    return prompts
+    assert response.json()["detail"] == "A product with this name already exists"
+    assert await get_product_from_db(product_b["id"]) == product_b
 
 
-# R1. New description is generated and saved
+# ====================================================== regenerate_description
 async def test_patch_regenerate_description_success(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"regenerate_description": True}
+        f"/products/{original['id']}", json={"regenerate_description": True}
     )
 
     assert response.status_code == 200
     assert response.json()["description"] == "Fresh AI description."
     assert len(prompts) == 1
+    assert (await get_product_from_db(original["id"]))["description"] == (
+        "Fresh AI description."
+    )
 
-    db_product = await get_product_from_db(original["id"])
-    assert db_product["description"] == "Fresh AI description."
 
-
-# R2. Every other field stays the same
 async def test_patch_regenerate_keeps_other_fields(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
     fake_gemini(monkeypatch)
 
     await client.patch(
-        f"/products/{original['id']}",
-        json={"regenerate_description": True}
+        f"/products/{original['id']}", json={"regenerate_description": True}
     )
 
     db_product = await get_product_from_db(original["id"])
@@ -335,7 +279,6 @@ async def test_patch_regenerate_keeps_other_fields(client, monkeypatch):
             assert db_product[key] == value
 
 
-# R3. Prompt uses the existing name and category
 async def test_patch_regenerate_prompt_uses_existing_values(client, monkeypatch):
     original = (await seed_products([
         product_data(name="Wireless Mouse", category="Electronics")
@@ -343,52 +286,71 @@ async def test_patch_regenerate_prompt_uses_existing_values(client, monkeypatch)
     prompts = fake_gemini(monkeypatch)
 
     await client.patch(
-        f"/products/{original['id']}",
-        json={"regenerate_description": True}
+        f"/products/{original['id']}", json={"regenerate_description": True}
     )
 
     assert "Wireless Mouse" in prompts[0]
     assert "Electronics" in prompts[0]
 
 
-# R4. Prompt uses the NEW name when it changes in the same request
 async def test_patch_regenerate_prompt_uses_new_name(client, monkeypatch):
-    original = (await seed_products([
-        product_data(name="Wireless Mouse")
-    ]))[0]
+    original = (await seed_products([product_data(name="Wireless Mouse")]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"name": "Gaming Mouse", "regenerate_description": True}
+        json={"name": "Gaming Mouse", "regenerate_description": True},
     )
 
     assert response.status_code == 200
     assert "Gaming Mouse" in prompts[0]
     assert "Wireless Mouse" not in prompts[0]
-
     db_product = await get_product_from_db(original["id"])
     assert db_product["name"] == "Gaming Mouse"
     assert db_product["description"] == "Fresh AI description."
 
 
-# R5. Other products are not modified
+async def test_patch_regenerate_prompt_uses_new_category(client, monkeypatch):
+    original = (await seed_products([product_data(category="Electronics")]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    await client.patch(
+        f"/products/{original['id']}",
+        json={"category": "Office", "regenerate_description": True},
+    )
+
+    assert "Office" in prompts[0]
+    assert "Electronics" not in prompts[0]
+
+
+async def test_patch_regenerate_null_category_uses_other(client, monkeypatch):
+    original = (await seed_products([product_data(category="Electronics")]))[0]
+    prompts = fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{original['id']}",
+        json={"category": None, "regenerate_description": True},
+    )
+
+    assert response.status_code == 200
+    assert "Other" in prompts[0]
+    assert (await get_product_from_db(original["id"]))["category"] == "Other"
+
+
 async def test_patch_regenerate_does_not_modify_other_products(client, monkeypatch):
     product_a, product_b = await seed_products([
         product_data(name="Product A"),
-        product_data(name="Product B")
+        product_data(name="Product B"),
     ])
     fake_gemini(monkeypatch)
 
     await client.patch(
-        f"/products/{product_a['id']}",
-        json={"regenerate_description": True}
+        f"/products/{product_a['id']}", json={"regenerate_description": True}
     )
 
     assert await get_product_from_db(product_b["id"]) == product_b
 
 
-# R6. AI failures: right status code, and the row does not change at all
 @pytest.mark.parametrize(
     "exc,expected_status,expected_detail",
     [
@@ -400,67 +362,110 @@ async def test_patch_regenerate_does_not_modify_other_products(client, monkeypat
          "AI service is temporarily unavailable."),
         (AIError("Unexpected AI error"), 500,
          "An unexpected AI error occurred."),
+        (AIQuotaError(kind="daily"), 503,
+         "AI daily request quota exhausted. Please try again later."),
+        (AIQuotaError(kind="rate"), 503,
+         "AI request rate limit reached. Please try again shortly."),
+        (AIQuotaError(kind="unknown"), 503,
+         "AI service quota limit reached. Please try again later."),
     ],
-    ids=["timeout", "blocked", "upstream", "unexpected"]
+    ids=[
+        "timeout",
+        "blocked",
+        "upstream",
+        "unexpected",
+        "daily-quota",
+        "rate-quota",
+        "unknown-quota",
+    ],
 )
+
 async def test_patch_regenerate_ai_failure_leaves_row_unchanged(
     client, monkeypatch, exc, expected_status, expected_detail
 ):
     original = (await seed_products([product_data()]))[0]
-
-    async def fake_call_gemini(prompt):
-        raise exc
-
-    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+    fake_gemini_error(monkeypatch, exc)
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"name": "Renamed Product", "regenerate_description": True}
+        json={"name": "Renamed Product", "regenerate_description": True},
     )
 
     assert response.status_code == expected_status
     assert response.json()["detail"] == expected_detail
-
     # not even the name from the same request may be saved
     assert await get_product_from_db(original["id"]) == original
 
 
-# R7. Product does not exist: 404 and Gemini is never called
+@pytest.mark.parametrize("text", ["", "   "], ids=["empty", "blank"])
+async def test_patch_regenerate_empty_ai_text_returns_502(client, monkeypatch, text):
+    original = (await seed_products([product_data()]))[0]
+    fake_gemini(monkeypatch, text=text)
+
+    response = await client.patch(
+        f"/products/{original['id']}", json={"regenerate_description": True}
+    )
+
+    assert response.status_code == 502
+    assert await get_product_from_db(original["id"]) == original
+
+
+async def test_patch_regenerate_duplicate_name_returns_409(client, monkeypatch):
+    product_a, product_b = await seed_products([
+        product_data(name="Product A"),
+        product_data(name="Product B"),
+    ])
+    fake_gemini(monkeypatch)
+
+    response = await client.patch(
+        f"/products/{product_b['id']}",
+        json={"name": product_a["name"], "regenerate_description": True},
+    )
+
+    assert response.status_code == 409
+    assert await get_product_from_db(product_b["id"]) == product_b
+
+
 async def test_patch_regenerate_product_not_found(client, monkeypatch):
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
-        "/products/999999",
-        json={"regenerate_description": True}
+        "/products/999999", json={"regenerate_description": True}
     )
 
     assert response.status_code == 404
     assert prompts == []
 
 
-# R8. Flag together with a manual description is rejected
-async def test_patch_regenerate_with_manual_description_returns_422(client, monkeypatch):
+@pytest.mark.parametrize(
+    "description",
+    ["My own text", None],
+    ids=["manual-description", "null-description"],
+)
+async def test_patch_regenerate_with_manual_description_returns_422(
+    client, monkeypatch, description
+):
     original = (await seed_products([product_data()]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"description": "My own text", "regenerate_description": True}
+        json={
+            "description": description,
+            "regenerate_description": True,
+        },
     )
 
     assert response.status_code == 422
     assert prompts == []
     assert await get_product_from_db(original["id"]) == original
 
-
-# R9. Flag set to false and nothing else: nothing to update
 async def test_patch_regenerate_false_alone_returns_422(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"regenerate_description": False}
+        f"/products/{original['id']}", json={"regenerate_description": False}
     )
 
     assert response.status_code == 422
@@ -468,50 +473,43 @@ async def test_patch_regenerate_false_alone_returns_422(client, monkeypatch):
     assert await get_product_from_db(original["id"]) == original
 
 
-# R10. Flag with name = null: 400 and Gemini is never called
-async def test_patch_regenerate_with_null_name_returns_400(client, monkeypatch):
+async def test_patch_regenerate_with_null_name_returns_422(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"name": None, "regenerate_description": True}
+        json={"name": None, "regenerate_description": True},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert prompts == []
     assert await get_product_from_db(original["id"]) == original
 
 
-# R11. A normal PATCH (no flag) must never call Gemini
 async def test_patch_without_flag_does_not_call_gemini(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
-
-    async def fake_call_gemini(prompt):
-        pytest.fail("Gemini should not have been called")
-
-    monkeypatch.setattr("main.call_gemini", fake_call_gemini)
+    prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
-        f"/products/{original['id']}",
-        json={"price": 2500}
+        f"/products/{original['id']}", json={"price": 2500}
     )
 
     assert response.status_code == 200
     assert response.json()["price"] == 2500
+    assert prompts == []
+    assert (await get_product_from_db(original["id"]))["description"] == (
+        original["description"]
+    )
 
-    db_product = await get_product_from_db(original["id"])
-    assert db_product["description"] == original["description"]
 
-
-# R12. Flag set to false plus a normal field works like a normal PATCH
 async def test_patch_regenerate_false_with_other_field(client, monkeypatch):
     original = (await seed_products([product_data()]))[0]
     prompts = fake_gemini(monkeypatch)
 
     response = await client.patch(
         f"/products/{original['id']}",
-        json={"stock": 99, "regenerate_description": False}
+        json={"stock": 99, "regenerate_description": False},
     )
 
     assert response.status_code == 200
