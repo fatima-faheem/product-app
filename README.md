@@ -3,6 +3,12 @@
 
 A backend application built with FastAPI and PostgreSQL for managing product inventories, featuring AI-powered product description generation using Google's Gemini API.
 
+
+## Live API Documentation
+
+[Explore the deployed API](https://product-app-git-main-fatimafaheem788-8937.vercel.app/docs)
+
+
 ## Features
 
 - Create products individually or in bulk.
